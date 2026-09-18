@@ -39,7 +39,7 @@ bun run docker:up       # build and start app plus PostgreSQL locally
 bun run docker:down     # tear down the local Compose project
 ```
 
-The repository pins Bun 1.3.2. Keep the package metadata, Docker image, CI, and
+The repository pins Bun 1.3.12. Keep the package metadata, Docker image, CI, and
 documentation synchronized when changing it.
 
 `bun run e2e` starts two disposable PostgreSQL services, migrates them, builds
