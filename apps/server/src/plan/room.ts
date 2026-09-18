@@ -278,7 +278,19 @@ export async function restore(
 	try {
 		Y.applyUpdate(restored.doc, checkpoint, REMOTE);
 		await settle();
-		if (project(restored) !== source) {
+		/*
+		 * Compared canonically, because a snapshot is not always byte-identical
+		 * to what the same checkpoint projects today.
+		 *
+		 * Exports used to emit a blank line for an empty paragraph — the block
+		 * a stray Enter leaves behind — and no longer do, since MDX cannot read
+		 * one back. A document saved before that is still exactly this
+		 * checkpoint; it merely wrote down one character more. Normalising both
+		 * sides keeps the proof exact for everything the serializer can
+		 * express, rather than refusing to open those documents at all. The
+		 * next snapshot writes the canonical form and the difference is gone.
+		 */
+		if (project(restored) !== serialize(parse(source))) {
 			throw new Error("stored plan source does not match its Yjs checkpoint");
 		}
 

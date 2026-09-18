@@ -1,14 +1,15 @@
 import { describe, expect, it } from "bun:test";
 import { createHeadlessEditor } from "@lexical/headless";
 import { $isTableNode, TableCellNode, TableRowNode } from "@lexical/table";
-import { $getRoot, $isElementNode } from "lexical";
+import { $createParagraphNode, $createTextNode, $getRoot, $isElementNode } from "lexical";
 
 import { $createPlanNodes, exportPlan, importPlan } from "./convert";
 import { $isCodeBlockNode } from "./nodes/content";
 import { parse } from "./parse";
 import { registry } from "./registry";
+import { serialize } from "./serialize";
 
-import type { LexicalEditor } from "lexical";
+import type { LexicalEditor, RootNode } from "lexical";
 
 const REGISTRY = registry();
 
@@ -187,5 +188,59 @@ describe("conversion", () => {
 		let instance = editor();
 		importPlan(instance, "# Title\n", { registry: REGISTRY });
 		expect(exportPlan(instance, { registry: REGISTRY })).not.toContain("import ");
+	});
+
+	/*
+	 * A blank paragraph is what pressing Enter leaves behind, and MDX has no
+	 * node for one: it writes a blank line, and reading that line back produces
+	 * nothing. An export that emitted one would not equal its own canonical
+	 * form — which revisions, source hashes, and the document-summary job all
+	 * assume it does.
+	 */
+	describe("empty blocks", () => {
+		function withBlank(source: string, place: (root: RootNode) => void): string {
+			let instance = editor();
+			importPlan(instance, source, { registry: REGISTRY });
+			instance.update(() => place($getRoot() as RootNode), { discrete: true });
+			return exportPlan(instance, { registry: REGISTRY });
+		}
+
+		it("drops one left after the last block", () => {
+			let source = withBlank("# Title\n\nHello.\n", root => {
+				root.append($createParagraphNode());
+			});
+			expect(source).toBe("# Title\n\nHello.\n");
+			expect(serialize(parse(source))).toBe(source);
+		});
+
+		it("drops one left between two blocks", () => {
+			let source = withBlank("# Title\n\nOne.\n\nTwo.\n", root => {
+				root.getChildren()[1]!.insertAfter($createParagraphNode());
+			});
+			expect(source).toBe("# Title\n\nOne.\n\nTwo.\n");
+			expect(serialize(parse(source))).toBe(source);
+		});
+
+		it("drops one holding only whitespace", () => {
+			let source = withBlank("Hello.\n", root => {
+				let paragraph = $createParagraphNode();
+				paragraph.append($createTextNode("   "));
+				root.append(paragraph);
+			});
+			expect(source).toBe("Hello.\n");
+		});
+
+		it("leaves a document that is nothing but a blank paragraph empty", () => {
+			let source = withBlank("", root => {
+				root.append($createParagraphNode());
+			});
+			expect(source).toBe("");
+		});
+
+		it("keeps a paragraph that says something", () => {
+			let instance = editor();
+			importPlan(instance, "One.\n\nTwo.\n", { registry: REGISTRY });
+			expect(exportPlan(instance, { registry: REGISTRY })).toBe("One.\n\nTwo.\n");
+		});
 	});
 });

@@ -106,7 +106,52 @@ export function $exportPlanTree(options: ConvertOptions = {}): Root {
 	});
 
 	normalizeMarks(tree);
+	dropEmptyBlocks(tree);
 	return tree;
+}
+
+/**
+ * Is this a block MDX has no way to say?
+ *
+ * A paragraph with nothing in it, or nothing but whitespace. Both serialize to
+ * a blank line, and a blank line is separation rather than content: parsing it
+ * back produces no node at all.
+ */
+function isEmptyParagraph(node: unknown): boolean {
+	if (!node || typeof node !== "object") return false;
+	let value = node as { type?: string; children?: unknown[] };
+	if (value.type !== "paragraph") return false;
+	return (value.children ?? []).every(child => {
+		let text = child as { type?: string; value?: unknown };
+		return text?.type === "text" && typeof text.value === "string" && !text.value.trim();
+	});
+}
+
+/**
+ * Drop blocks that cannot survive being written down.
+ *
+ * Lexical keeps an empty paragraph wherever somebody pressed Enter — after the
+ * last block, or between two of them. Exporting one writes a blank line;
+ * reading that line back yields nothing, so the projection no longer equals its
+ * own canonical form.
+ *
+ * That equality is an invariant the rest of the system leans on: revisions and
+ * source hashes are taken from the projection, and the document-summary job
+ * asserts it outright and fails every attempt while it does not hold. A
+ * trailing newline from one keystroke was enough to stop a document ever being
+ * described.
+ *
+ * Removed here, at the one place a tree becomes source, so the guarantee
+ * belongs to the export rather than to whoever remembers to normalize after it.
+ * Emptying a container is safe: the dialect sets no minimum on block content,
+ * and an empty document already projects to an empty string.
+ */
+function dropEmptyBlocks(node: unknown): void {
+	if (!node || typeof node !== "object") return;
+	let parent = node as { children?: unknown[] };
+	if (!Array.isArray(parent.children)) return;
+	parent.children = parent.children.filter(child => !isEmptyParagraph(child));
+	for (let child of parent.children) dropEmptyBlocks(child);
 }
 
 /**
