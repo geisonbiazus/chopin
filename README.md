@@ -70,13 +70,15 @@ and tool vocabulary remain optimized for planning.
 - Pull access can view channels. Push or administration access is required to
   create or change them and to invoke the Planner.
 - The first eligible person to invoke the Planner or start a model-backed
-  research request supplies the GitHub App user token and Copilot entitlement
-  used for that channel. A server restart signs everyone out and releases that
-  ownership.
+  research request supplies the GitHub App user token used for that channel's
+  repository reads. A server restart signs everyone out and releases that
+  ownership. Model access is the deployment's, not theirs: one Anthropic API
+  key serves every channel.
 - Document and Chat context, along with repository material selected by
-  the Planner, is sent to GitHub Copilot during a turn. Model-backed background
-  jobs also send job-specific private material, including context loaded during
-  execution, to isolated Copilot workers. The public research worker receives
+  the Planner, is sent to the Anthropic Messages API during a turn. Model-backed
+  background jobs also send job-specific private material, including context
+  loaded during execution, to isolated worker sessions. The public research
+  worker receives
   only the exact submitted brief, but may derive or refine the queries it sends
   to web search. GitHub credentials remain process-local;
   documents, transcripts, decisions, research request staging, background-job
@@ -93,8 +95,8 @@ The development path requires:
 - Bun 1.3.12;
 - Docker Engine with Docker Compose, used for PostgreSQL;
 - a GitHub App owned by the deployment; and
-- a GitHub account with push or administration access to a test repository and,
-  to use the Planner, an active Copilot entitlement.
+- a GitHub account with push or administration access to a test repository; and
+- an Anthropic API key, to use the Planner.
 
 Register these local URLs on the GitHub App:
 
@@ -105,8 +107,7 @@ Setup URL: http://127.0.0.1:8787/auth/github/setup
 ```
 
 Enable expiring user authorization tokens, disable OAuth during installation,
-disable webhooks, and grant read access to Contents, Pull requests, Checks, and
-Commit statuses. See [Authentication](docs/authentication.md) for the exact App
+disable webhooks, and grant read access to Contents and Pull requests. See [Authentication](docs/authentication.md) for the exact App
 settings and the additional permission needed for organization admission.
 
 Install, configure, and start Chopin:
@@ -115,7 +116,8 @@ Install, configure, and start Chopin:
 bun install
 cp .env.example .env
 openssl rand -hex 32
-# Fill in the GitHub App values and generated session key in .env.
+# Fill in the GitHub App values, your Anthropic API key, and the generated
+# session key in .env.
 bun run db:up
 bun run migrate
 bun run dev
@@ -151,7 +153,8 @@ yes, Markdown for now                  -> channel chat transcript
 The recent channel chat transcript is supplied as bounded context for the next turn,
 even when those messages did not address the Planner. The first eligible
 model-backed action, either a Planner turn or research request, claims the
-channel's Copilot usage until that owner's session ends or the server restarts.
+channel's repository access until that owner's session ends or the server
+restarts.
 The current web interface has no control for transferring that ownership
 manually.
 

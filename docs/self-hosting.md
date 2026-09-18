@@ -55,10 +55,10 @@ bearer tokens and browser sessions traverse it.
 - Docker for the application image, or Bun 1.3.12 for a source deployment.
 - A reachable PostgreSQL database and credentials with schema migration access.
 - A stable DNS name with TLS termination and WebSocket proxying.
-- Outbound HTTPS access to GitHub and the hosted Copilot service.
+- Outbound HTTPS access to GitHub and the Anthropic API.
 - A GitHub App owned by the deployment.
 - At least one user with repository push or administration access.
-- An active Copilot entitlement for each user who may own a hosted agent
+- An Anthropic API key for the deployment, if the hosted agent is on
   session.
 
 ## Register the GitHub App
@@ -107,11 +107,11 @@ the image.
 | `SESSION_ENCRYPTION_KEY`       | required            | Exactly 64 hexadecimal characters used for the encrypted OAuth attempt cookie, including its validated return path.                |
 | `SERVER_HOST`                  | `127.0.0.1`         | Source-process bind address. The image sets `0.0.0.0`.                                                                             |
 | `PORT`                         | `8787`              | Source-process HTTP and WebSocket port. The supplied image and health check expect internal port 8787.                             |
-| `MODEL`                        | `claude-sonnet-4.6` | Model requested for hosted agent sessions.                                                                                         |
-| `AGENT`                        | on                  | Set exactly `off` to prevent hosted agent turns, disable the entire background-job runner, and avoid Copilot CLI startup.          |
+| `MODEL`                        | `claude-opus-5`     | Anthropic model id requested for hosted agent sessions.                                                                            |
+| `ANTHROPIC_API_KEY`            | required unless off | Anthropic API key for every hosted agent and worker session. Startup fails without it unless `AGENT=off`.                          |
+| `AGENT`                        | on                  | Set exactly `off` to prevent hosted agent turns and disable the entire background-job runner. No model credential is then needed.  |
 | `BACKGROUND_JOBS`              | on                  | Set exactly `off` to disable background job scheduling. `AGENT=off` disables the entire runner.                                    |
 | `WEB_RESEARCH`                 | on                  | Set exactly `off` to disable new public-web research while retaining durable requests, artifacts, and other jobs.                  |
-| `COPILOT_CLI_PATH`             | automatic           | Advanced override for the Copilot CLI executable.                                                                                  |
 
 See [Background jobs and workers](background-jobs.md) for the combined
 `AGENT`, `BACKGROUND_JOBS`, and `WEB_RESEARCH` behavior and recovery model.
@@ -237,7 +237,7 @@ zero, so a policy equivalent to `Restart=on-failure` is insufficient.
 
 Startup validates configuration, database connectivity, migration history, and
 the exclusive writer lease before serving traffic. It does not fully validate
-the GitHub App, Copilot entitlement, model, or lazy Planner runtime.
+the GitHub App, the Anthropic API key, the model, or the lazy Planner runtime.
 
 After the first deployment:
 
@@ -248,8 +248,8 @@ After the first deployment:
 4. Confirm the picker lists only expected installations and repositories.
 5. Create a channel with a user who has push or administration access.
 6. Open the channel in a second browser and verify presence and live edits.
-7. Send one `@chopin` request to verify the owner's Copilot entitlement and the
-   hosted agent runtime.
+7. Send one `@chopin` request to verify the Anthropic credential and the hosted
+   agent runtime.
 8. Connect a local coding agent and call `list_documents` if MCP is part of the
    deployment's intended surface.
 
@@ -311,10 +311,11 @@ lease. Do not run two application instances against one database.
 **The UI returns 404 while APIs respond.** The source deployment did not build
 `apps/web/dist`, or the runtime image was assembled incorrectly.
 
-**The first model-backed action fails.** Check the invoking user's Copilot
-entitlement, the model, App permissions, repository write access, and Copilot
-CLI startup logs. Planner and research request execution validate these
-dependencies lazily.
+**The first model-backed action fails.** Check `ANTHROPIC_API_KEY`, the model
+id, App permissions, and repository write access. An invalid key surfaces as an
+authentication error on the first turn; an unknown model surfaces as a request
+error. Planner and research request execution validate these dependencies
+lazily.
 
 **MCP returns 401 or 403.** A 401 indicates an invalid or expired bearer. A 403
 indicates failed instance admission or a supplied Origin that differs from

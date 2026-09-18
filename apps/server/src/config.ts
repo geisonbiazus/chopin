@@ -14,8 +14,16 @@ import type { StorageConfig } from "./storage/registry";
 export type Config = {
 	host: string;
 	port: number;
-	/** Planner model. */
+	/** Planner model, an Anthropic model id. */
 	model: string;
+	/**
+	 * Credential for the hosted agent.
+	 *
+	 * Required whenever the agent is on, and checked at boot: a missing key is
+	 * a startup failure rather than a turn that fails the first time somebody
+	 * asks the Planner for something.
+	 */
+	anthropicApiKey: string | undefined;
 	/**
 	 * Whether to run the agent at all.
 	 *
@@ -44,7 +52,7 @@ export type Config = {
 };
 
 const DEFAULT_PORT = 8787;
-const DEFAULT_MODEL = "claude-sonnet-4.6";
+const DEFAULT_MODEL = "claude-opus-5";
 
 function port(): number {
 	let raw = process.env.PORT;
@@ -76,10 +84,15 @@ function storage(): StorageConfig {
 export function load(): Config {
 	let agent = process.env.AGENT !== "off";
 	let backgroundJobs = process.env.BACKGROUND_JOBS !== "off";
+	let anthropicApiKey = process.env.ANTHROPIC_API_KEY || undefined;
+	if (agent && !anthropicApiKey) {
+		throw new Error("ANTHROPIC_API_KEY is required unless AGENT=off");
+	}
 	return {
 		host: process.env.SERVER_HOST || "127.0.0.1",
 		port: port(),
 		model: process.env.MODEL || DEFAULT_MODEL,
+		anthropicApiKey,
 		agent,
 		backgroundJobs,
 		webResearch: agent && backgroundJobs && process.env.WEB_RESEARCH !== "off",

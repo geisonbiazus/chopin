@@ -10,11 +10,11 @@ import { JobService } from "./service";
 function registry(): JobRegistry {
 	return new JobRegistry([
 		researchEvidenceDefinition({
-			config: { agent: true, model: "model" },
+			config: { agent: true, model: "model", anthropicApiKey: "test-key" },
 			engine: async () => ({ findings: [], sources: [] }),
 		}),
 		researchAnswerDefinition({
-			config: { agent: true, model: "model" },
+			config: { agent: true, model: "model", anthropicApiKey: "test-key" },
 			engines: {
 				private: async () => ({ findings: [] }),
 				synthesize: async () => ({

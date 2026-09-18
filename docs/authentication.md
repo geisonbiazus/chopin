@@ -1,7 +1,7 @@
 # Authentication and authorization
 
-Authentication covers the browser product, WebSocket, local MCP, repository
-tools, and Copilot. A verified GitHub user supplies presence and attribution.
+Authentication covers the browser product, WebSocket, local MCP, and repository
+tools. A verified GitHub user supplies presence and attribution.
 Optional instance admission lists restrict who may use Chopin. Browser routes,
 WebSockets, and the hosted agent intersect the user's repository role with the
 GitHub App installation. Local MCP instead checks the repository role granted
@@ -30,16 +30,17 @@ Repository permissions for the complete product are:
 ```text
 Contents:        Read-only
 Pull requests:   Read-only
-Checks:          Read-only
-Commit statuses: Read-only
 Metadata:        Read-only (automatic)
 ```
 
-Contents backs file, tree, code-search, and commit-history tools. The other
-read-only permissions back the hosted GitHub MCP pull-request toolset. Chopin
-does not request repository, organization, or account write permission. An
-`AGENT=off` deployment only needs Contents and automatic Metadata access unless
-organization admission is enabled.
+Contents backs file, tree, code-search, and commit-history tools. Pull requests
+backs the pull-request tools. Chopin does not request repository, organization,
+or account write permission. An `AGENT=off` deployment only needs Contents and
+automatic Metadata access unless organization admission is enabled.
+
+Deployments that predate the Anthropic runtime also hold Checks and Commit
+statuses, which backed the hosted GitHub MCP pull-request toolset. Nothing reads
+them now; they can be removed at the next permission update.
 
 Organization admission additionally requires:
 
@@ -54,8 +55,9 @@ old permissions until the owner approves the update.
 
 No App ID, private key, JWT, installation access token, or webhook secret is
 used. Chopin acts on behalf of each signed-in user with a GitHub App user access
-token so repository-role checks and the user's Copilot entitlement remain
-theirs.
+token so repository-role checks remain theirs. Model access is separate and
+belongs to the deployment: one `ANTHROPIC_API_KEY` serves every channel, and no
+participant needs a model subscription of their own.
 
 Configure Chopin with the App's slug and OAuth client credentials. A minimal
 production environment contains:
@@ -70,6 +72,7 @@ GITHUB_APP_CLIENT_SECRET=...
 GITHUB_ALLOWED_USERS=octocat,hubot
 GITHUB_ALLOWED_ORGANIZATIONS=githubnext
 SESSION_ENCRYPTION_KEY=<64 hex characters>
+ANTHROPIC_API_KEY=<key>
 ```
 
 The client ID is distinct from the numeric App ID. Generate the encryption key

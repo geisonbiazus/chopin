@@ -6,6 +6,7 @@ services:
       # Coolify resolves default-bearing values from production before attaching
       # the preview env file, so preview-overridable values stay late-bound.
       AGENT: ${AGENT}
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY}
       BACKGROUND_JOBS: ${BACKGROUND_JOBS}
       APP_ORIGIN: ${APP_ORIGIN}
       DATABASE_URL: postgresql://chopin:chopin@${SERVICE_NAME_DB:-db}:5432/chopin?sslmode=disable

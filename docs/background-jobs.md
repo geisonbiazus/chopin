@@ -2,7 +2,7 @@
 
 Chopin's background system runs durable, versioned work outside the shared
 Planner conversation. A job may execute ordinary code or open one or more
-isolated Copilot worker sessions. The code calls the durable unit a **background
+isolated model worker sessions. The code calls the durable unit a **background
 job**; this document uses **worker** for the disposable execution session. A
 worker is not a child Planner turn, coding agent, or runtime plugin.
 
@@ -28,7 +28,7 @@ See [Hosted agent](hosted-agent.md) for the Planner conversation and
 | Failure                         | An attempt that consumes retry budget. `failures`, not `attempts`, is compared with `maxAttempts`. |
 | Claim generation                | A fencing counter that prevents an expired or cancelled worker from publishing late output.        |
 | Artifact                        | The immutable, validated JSON result written only when a job completes.                            |
-| Worker                          | A disposable execution context, optionally backed by an isolated Copilot SDK session.              |
+| Worker                          | A disposable execution context, optionally backed by an isolated model session.                    |
 | Background-job channel revision | The invalidation counter for job mutations in one channel, separate from each job's revision.      |
 
 Keep these counters separate from the Yjs epoch, document sequence, plan
@@ -44,7 +44,7 @@ flowchart LR
 	P -->|fenced claim| R[JobRunner]
 	R --> C[Credential resolver]
 	C --> X[Registered executor]
-	X -->|optional disposable session| A[Copilot worker]
+	X -->|optional disposable session| A[Model worker]
 	X -->|progress| P
 	X -->|candidate artifact| S
 	S -->|validate and settle| P
@@ -436,7 +436,8 @@ recoverable on a later read because observer delivery is not a durable queue.
 ## Credentials and ownership
 
 `credential: "active-planner"` means the job uses the channel's existing
-Planner owner and Copilot entitlement. The runner resolves ownership through
+Planner owner, whose GitHub token authorizes its repository reads. Model access
+is the deployment's and is not part of ownership. The runner resolves ownership through
 `ActiveOwnerBindings`; it never claims ownership itself. An explicit product
 action may establish ownership before enqueueing. Without an available owner,
 the job pauses as `owner-unavailable`.
@@ -491,11 +492,16 @@ evidence. This validates provenance, not factual accuracy or page safety.
 ### Executor-owned limits
 
 `JobLimits.maxAiCredits` is not centrally enforced by `JobRunner`. It describes
-the maximum aggregate credits for one job attempt. A model-backed executor must
+the maximum aggregate budget for one job attempt. A model-backed executor must
 set per-session limits whose possible total does not exceed it; for example, a
 60-credit two-stage job can allocate 30 credits to each worker. The current
-worker helper requires at least 30 credits per session. Keep definition metadata
-and actual worker construction synchronized.
+worker helper requires at least 30 per session. Keep definition metadata and
+actual worker construction synchronized.
+
+The unit is historical. The Anthropic runtime has no credit meter, so the worker
+helper converts the figure into a ceiling on model requests for that session —
+half the stated credits, floored at one. The guarantee is unchanged: a worker
+that will not settle is stopped rather than left running.
 
 Always recheck `credential.authorize`, observe credential and job abort signals,
 and discard the SDK session in `finally`.
@@ -581,8 +587,8 @@ repair.
 Here, **private** means not disclosed to public web search. Internal staging
 rows, selected compatibility projections, and artifacts are readable through
 authorized server paths. Normalized job input is persisted but omitted from the
-inline card projection. Private worker material is still sent to the hosted
-Copilot inference service under the active owner's credential.
+inline card projection. Private worker material is still sent to the
+Anthropic Messages API under the deployment's API key.
 
 ## Archive and deletion
 
@@ -706,7 +712,7 @@ E2E server environment where relevant.
 - Assuming process-local completion callbacks are durable delivery.
 - Bypassing `JobService` and therefore bypassing codecs, origins, versions, and
   byte limits.
-- Assuming Playwright executes live Copilot work; E2E runs with `AGENT=off` and
+- Assuming Playwright executes live model work; E2E runs with `AGENT=off` and
   seeds validated job state.
 
 ## Testing
@@ -731,7 +737,7 @@ bun run ci
 bun run e2e
 ```
 
-Definition tests should inject engines rather than call live Copilot. Cover
+Definition tests should inject engines rather than call a live model. Cover
 strict codecs, exact context separation, progress, citation or provenance rules,
 and artifact rejection. Runner tests should cover success, retries, timeout,
 owner loss, credential rotation, cancellation, heartbeat loss, late output, and

@@ -55,13 +55,13 @@ export async function setup(options: { answer?: boolean; evidence?: boolean } = 
 	let definitions = [];
 	if (options.evidence !== false) {
 		definitions.push(researchEvidenceDefinition({
-			config: { agent: true, model: "research-model" },
+			config: { agent: true, model: "research-model", anthropicApiKey: "test-key" },
 			engine: async () => ({ findings: [], sources: [] }),
 		}));
 	}
 	if (options.answer !== false) {
 		definitions.push(researchAnswerDefinition({
-			config: { agent: true, model: "research-model" },
+			config: { agent: true, model: "research-model", anthropicApiKey: "test-key" },
 			engines: {
 				private: async () => ({ findings: [] }),
 				synthesize: async () => REPORT,

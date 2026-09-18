@@ -105,11 +105,11 @@ async function setup() {
 	};
 	let registry = new JobRegistry([
 		researchEvidenceDefinition({
-			config: { agent: true, model: "research-model" },
+			config: { agent: true, model: "research-model", anthropicApiKey: "test-key" },
 			engine: async () => ({ findings: [], sources: [] }),
 		}),
 		researchAnswerDefinition({
-			config: { agent: true, model: "research-model" },
+			config: { agent: true, model: "research-model", anthropicApiKey: "test-key" },
 			engines: {
 				private: async () => ({ findings: [] }),
 				synthesize: async () => ({

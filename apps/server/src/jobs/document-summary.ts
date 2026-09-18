@@ -6,7 +6,7 @@ import { assert } from "@chopin/dialect/validate";
 
 import * as Agent from "../agent/client";
 
-import type { Tool } from "@github/copilot-sdk";
+import type { Tool } from "../agent/types";
 import type { Config } from "../config";
 import type { DocumentTarget } from "../plan/service";
 import type { JsonValue } from "../storage/model";
@@ -38,7 +38,7 @@ export type SummaryEngine = (
 ) => Promise<{ description: string; model: string }>;
 
 export type DocumentSummaryOptions = {
-	config: Pick<Config, "agent" | "model">;
+	config: Pick<Config, "agent" | "model" | "anthropicApiKey">;
 	current: (channelId: string) => Promise<DocumentTarget | undefined>;
 	refresh: (target: DocumentTarget) => Promise<void>;
 	commitCurrent: (
@@ -201,10 +201,10 @@ export class StaleDocumentSummaryError extends Error {
 	}
 }
 
-class CopilotSummaryEngine {
-	#config: Pick<Config, "agent" | "model">;
+class ModelSummaryEngine {
+	#config: Pick<Config, "agent" | "model" | "anthropicApiKey">;
 
-	constructor(config: Pick<Config, "agent" | "model">) {
+	constructor(config: Pick<Config, "agent" | "model" | "anthropicApiKey">) {
 		this.#config = config;
 	}
 
@@ -381,8 +381,8 @@ export function documentSummaryDefinition(options: DocumentSummaryOptions): JobD
 	DocumentSummaryInput,
 	DocumentSummaryArtifact
 > {
-	let copilot = new CopilotSummaryEngine(options.config);
-	let engine = options.engine ?? copilot.run.bind(copilot);
+	let hosted = new ModelSummaryEngine(options.config);
+	let engine = options.engine ?? hosted.run.bind(hosted);
 	return {
 		type: "document-summary",
 		version: 1,

@@ -3,7 +3,7 @@
 Chopin is one Bun application, one browser client, and one PostgreSQL database.
 The application serves the built client, HTTP API, Streamable HTTP MCP endpoint,
 and WebSocket from the same origin. GitHub supplies identity and repository
-authorization; GitHub Copilot supplies the hosted document agent runtime,
+authorization; the Anthropic Messages API supplies the hosted document agent runtime,
 currently named Planner.
 
 This document describes the system boundaries and collaborative document model.
@@ -32,7 +32,7 @@ and [Self-hosting](self-hosting.md) for deployment.
   The V1 product surface offers neither child research nor grandchildren. The UI
   blocks starting research from a child; the API may accept the request, but
   publication validation rejects linking a grandchild.
-- The **Planner** is the current name of Chopin's hosted Copilot-backed document
+- The **Planner** is the current name of Chopin's hosted document
   agent.
 - A **coding agent** is an external MCP client that creates or implements a
   document from its own local workspace.
@@ -53,7 +53,7 @@ flowchart LR
 	C[Local coding agent] -->|Bearer-authenticated MCP| S
 	S --> P[(PostgreSQL)]
 	S --> G[GitHub API]
-	S --> A[GitHub Copilot]
+	S --> A[Anthropic Messages API]
 	S --> W[Built web client]
 ```
 
@@ -144,7 +144,7 @@ owner credential but fresh isolated sessions; see
 
 - browser cookie verifiers and GitHub access and refresh tokens;
 - open rooms, pending update batches, and persistence coordinators;
-- disposable Copilot SDK sessions and copied credentials; and
+- disposable model sessions and copied credentials; and
 - repository and admission caches.
 
 Startup deliberately clears every process-session registry row and Planner
@@ -354,7 +354,7 @@ mention in its text. `instruction()` removes a mention before model input.
 
 Channel messages remain durable transcript entries. A bounded recent window
 enters the next Planner turn, and a separately bounded transcript bootstrap is
-used when a disposable Copilot session is recreated. The full transcript is not
+used when a disposable model session is recreated. The full transcript is not
 sent to every turn.
 
 ## Decisions and anchors

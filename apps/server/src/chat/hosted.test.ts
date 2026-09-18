@@ -68,7 +68,7 @@ function grant(accessToken: string): GitHubTokenGrant {
 	};
 }
 
-describe("hosted Copilot ownership", () => {
+describe("hosted agent ownership", () => {
 	it("keeps the first invoking login session until it is explicitly released", async () => {
 		let now = new Date("2026-08-13T12:00:00.000Z");
 		let storage = new MemoryStorage();

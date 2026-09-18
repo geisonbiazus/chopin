@@ -246,7 +246,7 @@ describe("research workspace codecs", () => {
 		).toThrow("aggregate bound");
 
 		let definition = researchAnswerDefinition({
-			config: { agent: true, model: "research-model" },
+			config: { agent: true, model: "research-model", anthropicApiKey: "test-key" },
 			engines: answerEngines(),
 		});
 		expect(definition.limits.maxInputBytes).toBeGreaterThanOrEqual(256 * 1024);
@@ -370,7 +370,7 @@ describe("research workspace execution", () => {
 		let observed: unknown;
 		let progress: string[] = [];
 		let definition = researchEvidenceDefinition({
-			config: { agent: true, model: "research-model" },
+			config: { agent: true, model: "research-model", anthropicApiKey: "test-key" },
 			engine: async (execution, query) => {
 				observed = { input: execution.input, query };
 				return { findings: ["Public finding"], sources: [PUBLIC_SOURCE] };
@@ -428,7 +428,7 @@ describe("research workspace execution", () => {
 			},
 		};
 		let definition = researchAnswerDefinition({
-			config: { agent: true, model: "research-model" },
+			config: { agent: true, model: "research-model", anthropicApiKey: "test-key" },
 			engines: injected,
 		});
 		expect(definition).toMatchObject({
@@ -494,7 +494,7 @@ describe("research workspace execution", () => {
 			};
 			let progress: string[] = [];
 			let definition = researchAnswerDefinition({
-				config: { agent: true, model: "research-model" },
+				config: { agent: true, model: "research-model", anthropicApiKey: "test-key" },
 				engines: injected,
 			});
 			let artifact = await definition.execute(execution(
@@ -524,7 +524,7 @@ describe("research workspace execution", () => {
 
 	it("rejects report and answer citations absent from supplied evidence", async () => {
 		let initial = researchAnswerDefinition({
-			config: { agent: true, model: "research-model" },
+			config: { agent: true, model: "research-model", anthropicApiKey: "test-key" },
 			engines: answerEngines({
 				synthesize: async () => ({
 					...REPORT,
@@ -536,7 +536,7 @@ describe("research workspace execution", () => {
 			.rejects.toMatchObject({ progressReason: "source-validation-failed" });
 
 		let followUp = researchAnswerDefinition({
-			config: { agent: true, model: "research-model" },
+			config: { agent: true, model: "research-model", anthropicApiKey: "test-key" },
 			engines: answerEngines({
 				answer: async () => ({
 					text: "Unsupported",

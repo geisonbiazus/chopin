@@ -1,9 +1,13 @@
-import type { CopilotClient, CopilotSession, SessionConfig } from "@github/copilot-sdk";
+import type { AgentSession, SessionConfig } from "./types";
 
-export type RuntimeClient = Pick<
-	CopilotClient,
-	"createSession" | "deleteSession" | "forceStop" | "start" | "stop"
->;
+/** What the Runtime needs of a provider: sessions it can open and let go of. */
+export type RuntimeClient = {
+	start: () => Promise<void>;
+	createSession: (config: SessionConfig) => Promise<AgentSession>;
+	deleteSession: (sessionId: string) => Promise<void>;
+	stop: () => Promise<Error[]>;
+	forceStop: () => Promise<void>;
+};
 
 export type RuntimeSource = {
 	client: RuntimeClient;
@@ -12,8 +16,8 @@ export type RuntimeSource = {
 
 type Generation = RuntimeSource & {
 	ready: Promise<void>;
-	opening: Set<Promise<CopilotSession>>;
-	sessions: Map<string, CopilotSession>;
+	opening: Set<Promise<AgentSession>>;
+	sessions: Map<string, AgentSession>;
 	closing: Map<string, Promise<Error[]>>;
 	disposing?: Promise<Error[]>;
 };
@@ -44,13 +48,13 @@ function bounded<T>(operation: Promise<T>, timeoutMs: number, message: string): 
 	});
 }
 
-/** Owns one lazily started Copilot runtime and every disposable session on it. */
+/** Owns one lazily started agent runtime and every disposable session on it. */
 export class Runtime {
 	#create: () => RuntimeSource;
 	#operationTimeoutMs: number;
 	#generation?: Generation;
-	#owners = new WeakMap<CopilotSession, Generation>();
-	#known = new WeakSet<CopilotSession>();
+	#owners = new WeakMap<AgentSession, Generation>();
+	#known = new WeakSet<AgentSession>();
 	#accepting = true;
 	#stopping?: Promise<void>;
 
@@ -59,22 +63,22 @@ export class Runtime {
 		this.#operationTimeoutMs = operationTimeoutMs;
 	}
 
-	async open(config: SessionConfig): Promise<CopilotSession> {
-		if (!this.#accepting) throw new Error("The Copilot runtime is shutting down.");
+	async open(config: SessionConfig): Promise<AgentSession> {
+		if (!this.#accepting) throw new Error("The agent runtime is shutting down.");
 		let generation = this.#current();
 		let opening = (async () => {
 			await generation.ready;
 			if (!this.#accepting || this.#generation !== generation) {
-				throw new Error("The Copilot runtime is shutting down.");
+				throw new Error("The agent runtime is shutting down.");
 			}
 			let session = await generation.client.createSession(config);
 			if (!this.#accepting || this.#generation !== generation) {
 				if (!generation.disposing) {
 					let errors = await this.#close(generation, session);
-					let cleanup = failure("The Copilot session could not be closed.", errors);
+					let cleanup = failure("The agent session could not be closed.", errors);
 					if (cleanup) throw cleanup;
 				}
-				throw new Error("The Copilot runtime is shutting down.");
+				throw new Error("The agent runtime is shutting down.");
 			}
 			generation.sessions.set(session.sessionId, session);
 			this.#owners.set(session, generation);
@@ -89,14 +93,14 @@ export class Runtime {
 		}
 	}
 
-	async discard(session: CopilotSession): Promise<boolean> {
+	async discard(session: AgentSession): Promise<boolean> {
 		let generation = this.#owners.get(session);
 		if (!generation) return this.#known.has(session);
 		let errors = await this.#close(generation, session);
 		generation.sessions.delete(session.sessionId);
 		generation.closing.delete(session.sessionId);
 		this.#owners.delete(session);
-		let error = failure("The Copilot session could not be closed.", errors);
+		let error = failure("The agent session could not be closed.", errors);
 		if (error) throw error;
 		return true;
 	}
@@ -112,14 +116,14 @@ export class Runtime {
 				await bounded(
 					Promise.allSettled(generation.opening),
 					this.#operationTimeoutMs,
-					"Copilot session opening did not stop before shutdown.",
+					"Agent session opening did not stop before shutdown.",
 				);
 			} catch (err) {
 				errors.push(reason(err));
 			}
 			errors.push(...await this.#dispose(generation));
 			if (this.#generation === generation) this.#generation = undefined;
-			let error = failure("The Copilot runtime could not shut down cleanly.", errors);
+			let error = failure("The agent runtime could not shut down cleanly.", errors);
 			if (error) throw error;
 		})();
 	}
@@ -130,8 +134,8 @@ export class Runtime {
 		let generation = {
 			...source,
 			ready: Promise.resolve(),
-			opening: new Set<Promise<CopilotSession>>(),
-			sessions: new Map<string, CopilotSession>(),
+			opening: new Set<Promise<AgentSession>>(),
+			sessions: new Map<string, AgentSession>(),
 			closing: new Map<string, Promise<Error[]>>(),
 		};
 		this.#generation = generation;
@@ -139,13 +143,13 @@ export class Runtime {
 			async err => {
 				let errors = [reason(err), ...await this.#dispose(generation)];
 				if (this.#generation === generation) this.#generation = undefined;
-				throw failure("The Copilot runtime could not start.", errors)!;
+				throw failure("The agent runtime could not start.", errors)!;
 			},
 		);
 		return generation;
 	}
 
-	#close(generation: Generation, session: CopilotSession): Promise<Error[]> {
+	#close(generation: Generation, session: AgentSession): Promise<Error[]> {
 		let existing = generation.closing.get(session.sessionId);
 		if (existing) return existing;
 		let closing = (async () => {
@@ -154,7 +158,7 @@ export class Runtime {
 				await bounded(
 					Promise.resolve().then(() => session.disconnect()),
 					this.#operationTimeoutMs,
-					`Copilot session ${session.sessionId} disconnect timed out.`,
+					`Agent session ${session.sessionId} disconnect timed out.`,
 				);
 			} catch (err) {
 				errors.push(reason(err));
@@ -163,7 +167,7 @@ export class Runtime {
 				await bounded(
 					Promise.resolve().then(() => generation.client.deleteSession(session.sessionId)),
 					this.#operationTimeoutMs,
-					`Copilot session ${session.sessionId} deletion timed out.`,
+					`Agent session ${session.sessionId} deletion timed out.`,
 				);
 			} catch (err) {
 				errors.push(reason(err));
@@ -192,7 +196,7 @@ export class Runtime {
 				let stopped = await bounded(
 					Promise.resolve().then(() => generation.client.stop()),
 					this.#operationTimeoutMs,
-					"Copilot runtime stop timed out.",
+					"Agent runtime stop timed out.",
 				);
 				errors.push(...stopped);
 				force = stopped.length > 0;
@@ -205,7 +209,7 @@ export class Runtime {
 					await bounded(
 						Promise.resolve().then(() => generation.client.forceStop()),
 						this.#operationTimeoutMs,
-						"Copilot runtime force-stop timed out.",
+						"Agent runtime force-stop timed out.",
 					);
 				} catch (err) {
 					errors.push(reason(err));

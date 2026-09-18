@@ -10,6 +10,7 @@ const REQUIRED = {
 	GITHUB_APP_CLIENT_ID: "client-id",
 	GITHUB_APP_CLIENT_SECRET: "client-secret",
 	SESSION_ENCRYPTION_KEY: "11".repeat(32),
+	ANTHROPIC_API_KEY: "sk-ant-test",
 };
 
 function configured(overrides: Record<string, string | undefined> = {}) {
@@ -70,6 +71,16 @@ describe("configuration", () => {
 			backgroundJobs: true,
 			webResearch: false,
 		});
+	});
+
+	it("requires an Anthropic key whenever the hosted agent is on", () => {
+		expect(() => configured({ ANTHROPIC_API_KEY: undefined })).toThrow("ANTHROPIC_API_KEY");
+		expect(configured({ ANTHROPIC_API_KEY: undefined, AGENT: "off" })).toMatchObject({
+			agent: false,
+			anthropicApiKey: undefined,
+		});
+		expect(configured().model).toBe("claude-opus-5");
+		expect(configured({ MODEL: "claude-sonnet-5" }).model).toBe("claude-sonnet-5");
 	});
 
 	it("requires a valid PostgreSQL URL", () => {

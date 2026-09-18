@@ -2,25 +2,19 @@ import { describe, expect, it } from "bun:test";
 
 import {
 	assertWorkerTools,
-	auditPublicResearchTools,
 	openWorker,
 	plannerConfiguration,
 	publicResearchConfiguration,
-	RUNTIME_ENV,
 	workerConfiguration,
 } from "./client";
 import { gate, publicResearchGate, terminalGate } from "./permissions";
+import { pullRequestTools } from "./pull-requests";
 import { repositoryTools } from "./repository";
 
-import type { PermissionRequest, Tool } from "@github/copilot-sdk";
+import type { PermissionRequest, Tool } from "./types";
 
-async function webSearchTools(input: { serverName: string }) {
-	expect(input).toEqual({ serverName: "github-mcp-server" });
-	return { tools: [{ name: "web_search" }, { name: "search_repositories" }] };
-}
-
-describe("hosted Copilot configuration", () => {
-	it("exposes only explicit custom and MCP tools", () => {
+describe("hosted agent configuration", () => {
+	it("gives the planner exactly its own tools, every one of them gated", () => {
 		let tool = {
 			name: "read_plan",
 			description: "read",
@@ -33,24 +27,19 @@ describe("hosted Copilot configuration", () => {
 			{
 				token: "ghu_owner",
 				repository: { id: "R_repo", owner: "octo-org", name: "score", defaultBranch: "main" },
+				bootstrap: "Earlier in this room: nothing.",
 			},
 		);
 
-		expect(config.gitHubToken).toBe("ghu_owner");
-		expect(config.availableTools).toEqual(["mcp:*", "custom:*"]);
-		expect(config.tools?.[0]?.skipPermission).toBe(false);
-		expect(config.enableConfigDiscovery).toBe(false);
-		expect(config.skipCustomInstructions).toBe(true);
-		expect(config.enableHostGitOperations).toBe(false);
-		expect(config.enableSkills).toBe(false);
-		expect(config.skipEmbeddingRetrieval).toBe(true);
-		expect(config.largeOutput).toEqual({ enabled: false });
-		expect(config.mcpServers?.github).toMatchObject({
-			url: "https://api.githubcopilot.com/mcp/",
-			headers: { Authorization: "Bearer ghu_owner", "X-MCP-Readonly": "true" },
-		});
-		expect(config.customAgents?.[0]?.prompt).toContain("read_repository_file");
-		expect(config.customAgents?.[0]?.prompt).not.toContain("You have `view`, `grep` and `glob`");
+		expect(config.model).toBe("model");
+		expect(config.streaming).toBe(true);
+		expect(config.tools).toHaveLength(1);
+		expect(config.tools[0]?.skipPermission).toBe(false);
+		expect(config.webSearch).toBeUndefined();
+		expect(config.agent.prompt).toContain("read_repository_file");
+		expect(config.agent.prompt).toContain("read_pull_request");
+		expect(config.systemMessage).toContain("octo-org/score");
+		expect(config.systemMessage).toContain("Earlier in this room: nothing.");
 	});
 
 	it("gives a worker only its terminal result tool", async () => {
@@ -71,223 +60,60 @@ describe("hosted Copilot configuration", () => {
 		expect(() => workerConfiguration({ model: "model" }, { ...options, maxAiCredits: 29 }))
 			.toThrow("at least 30");
 
-		expect(config.gitHubToken).toBe("ghu_owner");
-		expect(config.enableConfigDiscovery).toBe(false);
 		expect(config.streaming).toBe(false);
-		expect(config.sessionLimits).toEqual({ maxAiCredits: 32 });
-		expect(config.availableTools).toEqual(["custom:submit_job_result"]);
+		expect(config.maxRequests).toBe(16);
+		expect(config.webSearch).toBeUndefined();
 		expect(config.tools).toHaveLength(1);
-		expect(config.tools?.[0]).toMatchObject({
+		expect(config.tools[0]).toMatchObject({
 			name: "submit_job_result",
 			skipPermission: false,
 			isTerminal: true,
 		});
-		expect(config.mcpServers).toEqual({});
-		expect(config.customAgents).toHaveLength(1);
-		expect(config.customAgents?.[0]).toMatchObject({
+		expect(config.agent).toMatchObject({
 			name: "chopin-document-summary",
 			prompt: "Summarize the supplied document and submit one result.",
-			infer: false,
 		});
-		expect(config.customAgents?.[0]?.tools).toBeUndefined();
 
 		let decide = terminalGate("submit_job_result");
-		expect(
-			await decide(
-				{ kind: "custom-tool", toolName: "submit_job_result" } as PermissionRequest,
-				{ sessionId: "worker" },
-			),
-		).toEqual({ kind: "approve-once" });
-		expect(
-			await decide(
-				{ kind: "custom-tool", toolName: "read_plan" } as PermissionRequest,
-				{ sessionId: "worker" },
-			),
-		).toMatchObject({ kind: "reject" });
-		expect(
-			await decide(
-				{ kind: "url", url: "https://example.com" } as PermissionRequest,
-				{ sessionId: "worker" },
-			),
-		).toMatchObject({ kind: "reject" });
+		expect(await decide({ kind: "custom-tool", toolName: "submit_job_result" }))
+			.toEqual({ kind: "approve-once" });
+		expect(await decide({ kind: "custom-tool", toolName: "read_plan" }))
+			.toMatchObject({ kind: "reject" });
+		expect(await decide({ kind: "url", url: "https://example.com" }))
+			.toMatchObject({ kind: "reject" });
+	});
+
+	it("refuses a worker whose owner went away", async () => {
+		let denials = 0;
+		let decide = publicResearchGate("submit_research_result", async () => false, () => denials++);
+		expect(await decide({ kind: "custom-tool", toolName: "submit_research_result" }))
+			.toMatchObject({ kind: "reject" });
+		expect(denials).toBe(1);
 	});
 
 	it("fails worker capability audits closed", () => {
-		let result = { name: "submit_job_result", description: "submit" };
+		let result = { name: "submit_job_result", namespacedName: "custom:submit_job_result" };
 		let web = {
 			name: "web_search",
-			description: "search",
-			namespacedName: "github-mcp-server/web_search",
 			mcpServerName: "github-mcp-server",
 			mcpToolName: "web_search",
 		};
 		expect(() => assertWorkerTools([result], "submit_job_result")).not.toThrow();
 		expect(() => assertWorkerTools([result, web], "submit_job_result", true)).not.toThrow();
 		expect(() => assertWorkerTools([], "submit_job_result")).toThrow("received none");
+		// The web tool is missing where it is required.
+		expect(() => assertWorkerTools([result], "submit_job_result", true)).toThrow("mcp:web_search");
+		// And present where it is not.
+		expect(() => assertWorkerTools([result, web], "submit_job_result")).toThrow("web_search");
 		expect(() =>
 			assertWorkerTools(
-				[result, { name: "web_fetch", description: "fetch", namespacedName: "builtin:web_fetch" }],
+				[result, { name: "web_fetch", namespacedName: "builtin:web_fetch" }],
 				"submit_job_result",
 			)
 		).toThrow("builtin:web_fetch");
 		expect(() =>
-			assertWorkerTools(
-				[
-					result,
-					{ ...web, mcpServerName: "ambient" },
-				],
-				"submit_job_result",
-				true,
-			)
+			assertWorkerTools([result, { ...web, mcpServerName: "ambient" }], "submit_job_result", true)
 		).toThrow("mcp:web_search");
-	});
-
-	it("waits for public MCP readiness before auditing the complete tool set", async () => {
-		let initializations = 0;
-		let polls = 0;
-		let now = 0;
-		let result = { name: "submit_research_result", description: "submit" };
-		let web = {
-			name: "web_search",
-			description: "search",
-			namespacedName: "github-mcp-server/web_search",
-			mcpServerName: "github-mcp-server",
-			mcpToolName: "web_search",
-		};
-		let session = {
-			rpc: {
-				tools: {
-					initializeAndValidate: async () => {
-						initializations++;
-						return {};
-					},
-					getCurrentMetadata: async () => ({
-						tools: initializations > 1 ? [result, web] : [result],
-					}),
-				},
-				mcp: {
-					list: async () => ({
-						servers: [{
-							name: "github-mcp-server",
-							status: ++polls > 1 ? "connected" as const : "pending" as const,
-						}],
-					}),
-					listTools: webSearchTools,
-				},
-			},
-		};
-		await auditPublicResearchTools(session, "submit_research_result", {
-			timeoutMs: 2,
-			pollMs: 1,
-			now: () => now,
-			wait: async ms => {
-				now += ms;
-			},
-		});
-		expect(initializations).toBe(2);
-		expect(polls).toBe(2);
-	});
-
-	it("fails public MCP readiness closed on connection failure and timeout", async () => {
-		let metadata = {
-			initializeAndValidate: async () => ({}),
-			getCurrentMetadata: async () => ({ tools: [] }),
-		};
-		await expect(auditPublicResearchTools({
-			rpc: {
-				tools: metadata,
-				mcp: {
-					list: async () => ({
-						servers: [{
-							name: "github-mcp-server",
-							status: "failed" as const,
-							error: "denied",
-						}],
-					}),
-					listTools: webSearchTools,
-				},
-			},
-		}, "submit_research_result")).rejects.toThrow("failed: denied");
-		await expect(auditPublicResearchTools({
-			rpc: {
-				tools: metadata,
-				mcp: {
-					list: async () => ({
-						servers: [{ name: "github-mcp-server", status: "connected" as const }],
-					}),
-					listTools: async () => ({ tools: [{ name: "get_file" }] }),
-				},
-			},
-		}, "submit_research_result")).rejects.toThrow("does not offer web_search; offered get_file");
-		await expect(auditPublicResearchTools({
-			rpc: {
-				tools: metadata,
-				mcp: {
-					list: async () => ({
-						servers: [{ name: "github-mcp-server", status: "connected" as const }],
-					}),
-					listTools: webSearchTools,
-				},
-			},
-		}, "submit_research_result")).rejects.toThrow("received none");
-		let now = 0;
-		await expect(auditPublicResearchTools(
-			{
-				rpc: {
-					tools: metadata,
-					mcp: {
-						list: async () => ({
-							servers: [{ name: "github-mcp-server", status: "pending" as const }],
-						}),
-						listTools: webSearchTools,
-					},
-				},
-			},
-			"submit_research_result",
-			{
-				timeoutMs: 1,
-				pollMs: 1,
-				now: () => now,
-				wait: async ms => {
-					now += ms;
-				},
-			},
-		)).rejects.toThrow("timed out");
-		let late = 0;
-		await expect(auditPublicResearchTools(
-			{
-				rpc: {
-					tools: metadata,
-					mcp: {
-						list: async () => {
-							late = 2;
-							return {
-								servers: [{ name: "github-mcp-server", status: "connected" as const }],
-							};
-						},
-						listTools: webSearchTools,
-					},
-				},
-			},
-			"submit_research_result",
-			{ timeoutMs: 1, now: () => late },
-		)).rejects.toThrow("timed out");
-		await expect(auditPublicResearchTools(
-			{
-				rpc: {
-					tools: {
-						initializeAndValidate: () => new Promise<never>(() => {}),
-						getCurrentMetadata: async () => ({ tools: [] }),
-					},
-					mcp: {
-						list: async () => ({ servers: [] }),
-						listTools: webSearchTools,
-					},
-				},
-			},
-			"submit_research_result",
-			{ timeoutMs: 5 },
-		)).rejects.toThrow("timed out");
 	});
 
 	it("isolates public web research from private capabilities", async () => {
@@ -304,50 +130,25 @@ describe("hosted Copilot configuration", () => {
 			result,
 			maxAiCredits: 32,
 		});
-		expect(config.availableTools).toEqual([
-			"custom:submit_research_result",
-			"mcp:web_search",
-		]);
-		expect(config.githubMcpToolConfig).toEqual({ additionalTools: ["web_search"] });
-		expect(config.mcpServers).toEqual({});
-		expect(config.enableConfigDiscovery).toBe(true);
-		expect(config.enableCitations).toBe(true);
-		expect(RUNTIME_ENV).toEqual({
-			COPILOT_ENABLE_BUILTIN_GITHUB_MCP: "true",
-			COPILOT_PLUGIN_DIR_ONLY: "true",
-		});
 		expect(config.tools).toHaveLength(1);
+		expect(config.tools[0]?.name).toBe("submit_research_result");
+		expect(config.webSearch).toEqual({ maxUses: 12 });
+		expect(config.streaming).toBe(false);
 
-		let denials = 0;
-		let decide = publicResearchGate("submit_research_result", undefined, () => denials++);
+		let decide = publicResearchGate("submit_research_result");
+		expect(await decide({ kind: "custom-tool", toolName: "submit_research_result" }))
+			.toEqual({ kind: "approve-once" });
+		expect(await decide({ kind: "custom-tool", toolName: "read_plan" }))
+			.toMatchObject({ kind: "reject" });
+		expect(await decide({ kind: "url", url: "https://example.com/evidence" }))
+			.toMatchObject({ kind: "reject" });
 		expect(
 			await decide({
 				kind: "mcp",
 				serverName: "github-mcp-server",
 				readOnly: true,
 				toolName: "web_search",
-			} as PermissionRequest, { sessionId: "worker" }),
-		).toEqual({ kind: "approve-once" });
-		expect(
-			await decide({
-				kind: "mcp",
-				serverName: "github",
-				readOnly: true,
-				toolName: "web_search",
-			} as PermissionRequest, { sessionId: "worker" }),
-		).toMatchObject({ kind: "reject" });
-		expect(denials).toBe(1);
-		expect(
-			await decide({
-				kind: "url",
-				url: "https://example.com/evidence",
-			} as PermissionRequest, { sessionId: "worker" }),
-		).toMatchObject({ kind: "reject" });
-		expect(
-			await decide({
-				kind: "custom-tool",
-				toolName: "read_plan",
-			} as PermissionRequest, { sessionId: "worker" }),
+			}),
 		).toMatchObject({ kind: "reject" });
 	});
 
@@ -359,7 +160,7 @@ describe("hosted Copilot configuration", () => {
 			handler: () => "ok",
 		} as Tool;
 		await expect(openWorker(
-			{ agent: false, model: "model" },
+			{ agent: false, model: "model", anthropicApiKey: "test-key" },
 			{
 				token: "ghu_owner",
 				name: "chopin-document-summary",
@@ -370,67 +171,112 @@ describe("hosted Copilot configuration", () => {
 		)).rejects.toThrow("disabled");
 	});
 
-	it("confines MCP and denies every host capability", async () => {
+	it("denies everything the planner was not given", async () => {
 		let decide = gate({
 			owner: "octo-org",
 			repository: "score",
 			tools: new Set(["read_plan"]),
 		});
+		expect(await decide({ kind: "custom-tool", toolName: "read_plan" }))
+			.toEqual({ kind: "approve-once" });
+		expect(await decide({ kind: "custom-tool", toolName: "edit_repository" }))
+			.toMatchObject({ kind: "reject" });
+		expect(await decide({ kind: "shell", command: "cat /etc/passwd" }))
+			.toMatchObject({ kind: "reject" });
+		expect(await decide({ kind: "file", path: "/etc/passwd" }))
+			.toMatchObject({ kind: "reject" });
+		expect(await decide({ kind: "url", url: "https://example.com" }))
+			.toMatchObject({ kind: "reject" });
 		expect(
 			await decide({
 				kind: "mcp",
 				serverName: "github",
 				readOnly: true,
 				toolName: "get_pull_request",
-				toolTitle: "Pull request",
 				args: { owner: "octo-org", repo: "score" },
-			} as PermissionRequest, { sessionId: "s" }),
-		).toEqual({ kind: "approve-once" });
-		expect(
-			await decide({
-				kind: "mcp",
-				serverName: "github",
-				readOnly: true,
-				toolName: "get_pull_request",
-				toolTitle: "Pull request",
-				args: { owner: "other", repo: "private" },
-			} as PermissionRequest, { sessionId: "s" }),
+			} as PermissionRequest),
 		).toMatchObject({ kind: "reject" });
-		expect(
-			await decide({
-				kind: "mcp",
-				serverName: "github",
-				readOnly: true,
-				toolName: "issue_read",
-				toolTitle: "Issue",
-				args: { owner: "octo-org", repo: "score", method: "get_sub_issues" },
-			} as PermissionRequest, { sessionId: "s" }),
-		).toMatchObject({ kind: "reject" });
-		expect(
-			await decide({
-				kind: "mcp",
-				serverName: "github",
-				readOnly: true,
-				toolName: "search_issues",
-				toolTitle: "Search",
-				args: { owner: "octo-org", repo: "score", query: "repo:other/private secret" },
-			} as PermissionRequest, { sessionId: "s" }),
-		).toMatchObject({ kind: "reject" });
-		expect(
-			await decide({
-				kind: "mcp",
-				serverName: "github",
-				readOnly: true,
-				toolName: "get_pull_request",
-				toolTitle: "Pull request",
-				args: "octo-org/score",
-			} as PermissionRequest, { sessionId: "s" }),
-		).toMatchObject({ kind: "reject" });
-		expect(
-			await decide({ kind: "read", path: "/etc/passwd", intention: "read" } as PermissionRequest, {
-				sessionId: "s",
-			}),
-		).toMatchObject({ kind: "reject" });
+	});
+
+	it("stops a planner whose owner lost the room", async () => {
+		let decide = gate({
+			owner: "octo-org",
+			repository: "score",
+			tools: new Set(["read_plan"]),
+			active: async () => false,
+		});
+		expect(await decide({ kind: "custom-tool", toolName: "read_plan" }))
+			.toMatchObject({ kind: "reject", feedback: expect.stringContaining("no longer active") });
+	});
+});
+
+describe("hosted pull request tools", () => {
+	it("binds every read to the channel's repository", async () => {
+		let urls: URL[] = [];
+		let tools = pullRequestTools({
+			token: "ghu_owner",
+			repository: { id: "R_repo", owner: "octo-org", name: "score", defaultBranch: "main" },
+			fetch: async input => {
+				let url = new URL(String(input));
+				urls.push(url);
+				if (url.pathname.endsWith("/files")) {
+					return Response.json([{ filename: "src/a.ts", status: "modified", additions: 2 }]);
+				}
+				if (url.pathname.endsWith("/reviews")) {
+					return Response.json([{ user: { login: "mona" }, state: "APPROVED" }]);
+				}
+				if (/\/pulls\/\d+$/.test(url.pathname)) {
+					return Response.json({
+						number: 7,
+						title: "Change",
+						state: "open",
+						user: { login: "mona" },
+						head: { ref: "topic" },
+						base: { ref: "main" },
+						additions: 2,
+						deletions: 1,
+					});
+				}
+				return Response.json([{ number: 7, title: "Change", state: "open", head: { ref: "t" } }]);
+			},
+		});
+		let call = (name: string, input: unknown) => {
+			let tool = tools.find(value => value.name === name)!;
+			return (tool.handler as (raw: unknown) => Promise<string>)(input);
+		};
+
+		expect(await call("list_pull_requests", {})).toContain("Change");
+		expect(await call("read_pull_request", { number: 7 })).toContain('"number": 7');
+		expect(await call("list_pull_request_files", { number: 7 })).toContain("src/a.ts");
+		expect(await call("list_pull_request_reviews", { number: 7 })).toContain("APPROVED");
+		expect(await call("list_open_pull_requests_for_branch", { branch: "topic" })).toContain(
+			"Change",
+		);
+
+		expect(urls.every(url => url.pathname.startsWith("/repos/octo-org/score/pulls"))).toBe(true);
+		let branch = urls.at(-1)!;
+		expect(branch.searchParams.get("head")).toBe("octo-org:topic");
+	});
+
+	it("refuses arguments it cannot trust and reports authorization loss", async () => {
+		let token: string | undefined = "ghu_current";
+		let tools = pullRequestTools({
+			token: () => token,
+			repository: { id: "R", owner: "o", name: "r", defaultBranch: "main" },
+			fetch: async () => Response.json([]),
+		});
+		let call = (name: string, input: unknown) => {
+			let tool = tools.find(value => value.name === name)!;
+			return (tool.handler as (raw: unknown) => Promise<string>)(input);
+		};
+
+		expect(await call("read_pull_request", { number: 0 })).toContain(
+			"positive pull request number",
+		);
+		expect(await call("list_pull_requests", { state: "merged" })).toContain("state must be");
+		expect(await call("list_pull_requests", { limit: 500 })).toContain("limit must be");
+		token = undefined;
+		expect(await call("list_pull_requests", {})).toContain("authorization expired");
 	});
 });
 

@@ -14,7 +14,7 @@ slug aliases, collaboration recovery state, domain sidecars, token-free ownershi
 references, parent-scoped research request staging, durable background jobs,
 ordinary child channels, and the writer lease.
 GitHub tokens, browser-cookie verifiers, open rooms, Awareness presence, and
-Copilot SDK sessions never cross the storage boundary.
+Model sessions never cross the storage boundary.
 
 The versioned sidecar is the atomic domain snapshot associated with a channel.
 It includes document sequence and plan revision counters, question and comment
@@ -234,7 +234,7 @@ After acquiring the writer lease, every application start deletes all
 `web_sessions` rows and clears Planner owner references. Reserved summary and
 transcript cursor fields and the generation remain unchanged; the current
 runtime does not advance the summary or cursor, and startup forces status to
-`unavailable`. A later owner creates a fresh Copilot SDK session from bounded
+`unavailable`. A later owner creates a fresh model session from bounded
 transcript context and the current document.
 
 Active external implementation runs are different: their graph lock, run

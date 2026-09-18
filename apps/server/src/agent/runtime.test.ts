@@ -2,7 +2,7 @@ import { describe, expect, it } from "bun:test";
 
 import { Runtime } from "./runtime";
 
-import type { CopilotSession, SessionConfig } from "@github/copilot-sdk";
+import type { AgentSession, SessionConfig } from "./types";
 import type { RuntimeClient } from "./runtime";
 
 function deferred<T>() {
@@ -15,13 +15,13 @@ function deferred<T>() {
 	return { promise, resolve, reject };
 }
 
-function fakeSession(id: string, disconnect: () => Promise<void>): CopilotSession {
-	return { sessionId: id, disconnect } as CopilotSession;
+function fakeSession(id: string, disconnect: () => Promise<void>): AgentSession {
+	return { sessionId: id, disconnect } as AgentSession;
 }
 
 let config = { model: "model" } as SessionConfig;
 
-describe("shared Copilot runtime", () => {
+describe("shared agent runtime", () => {
 	it("starts once for concurrent session opens", async () => {
 		let entered = deferred<void>();
 		let ready = deferred<void>();
@@ -114,7 +114,7 @@ describe("shared Copilot runtime", () => {
 
 	it("rejects new and in-flight sessions once shutdown begins", async () => {
 		let creating = deferred<void>();
-		let created = deferred<CopilotSession>();
+		let created = deferred<AgentSession>();
 		let disconnected = 0;
 		let deleted = 0;
 		let stops = 0;
@@ -251,7 +251,7 @@ describe("shared Copilot runtime", () => {
 
 	it("leaves a session that resolves after disposal to the stopped client", async () => {
 		let creating = deferred<void>();
-		let created = deferred<CopilotSession>();
+		let created = deferred<AgentSession>();
 		let disconnected = 0;
 		let deleted = 0;
 		let cleaned = false;

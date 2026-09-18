@@ -20,7 +20,7 @@ import {
 } from "./service";
 
 import type { Server } from "bun";
-import type { SessionEvent } from "@github/copilot-sdk";
+import type { SessionEvent } from "../agent/types";
 import type { Chat } from "./service";
 import type { Room } from "./service";
 import type { SocketData } from "../wire";

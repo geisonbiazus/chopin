@@ -124,7 +124,7 @@ describe("document summary definition", () => {
 		let current = target();
 		let received = "";
 		let definition = documentSummaryDefinition({
-			config: { agent: true, model: "summary-model" },
+			config: { agent: true, model: "summary-model", anthropicApiKey: "test-key" },
 			current: async () => current,
 			refresh: async () => {},
 			commitCurrent,
@@ -158,7 +158,7 @@ describe("document summary definition", () => {
 	it("reads legacy V1 summary artifacts without treating them as descriptions", () => {
 		let current = target();
 		let definition = documentSummaryDefinition({
-			config: { agent: true, model: "summary-model" },
+			config: { agent: true, model: "summary-model", anthropicApiKey: "test-key" },
 			current: async () => current,
 			refresh: async () => {},
 			commitCurrent,
@@ -178,7 +178,7 @@ describe("document summary definition", () => {
 	it("runs a persisted markerless V1 request with the new description behavior", async () => {
 		let current = target();
 		let definition = documentSummaryDefinition({
-			config: { agent: true, model: "summary-model" },
+			config: { agent: true, model: "summary-model", anthropicApiKey: "test-key" },
 			current: async () => current,
 			refresh: async () => {},
 			commitCurrent,
@@ -203,7 +203,7 @@ describe("document summary definition", () => {
 	it("rejects descriptions containing more than one physical line", async () => {
 		let current = target();
 		let definition = documentSummaryDefinition({
-			config: { agent: true, model: "summary-model" },
+			config: { agent: true, model: "summary-model", anthropicApiKey: "test-key" },
 			current: async () => current,
 			refresh: async () => {},
 			commitCurrent,
@@ -221,7 +221,7 @@ describe("document summary definition", () => {
 		let current = target("", 0);
 		let called = false;
 		let definition = documentSummaryDefinition({
-			config: { agent: true, model: "summary-model" },
+			config: { agent: true, model: "summary-model", anthropicApiKey: "test-key" },
 			current: async () => current,
 			refresh: async () => {},
 			commitCurrent,
@@ -241,7 +241,7 @@ describe("document summary definition", () => {
 		let current = target("# Changed\n", 4);
 		let refreshed: DocumentTarget[] = [];
 		let definition = documentSummaryDefinition({
-			config: { agent: true, model: "summary-model" },
+			config: { agent: true, model: "summary-model", anthropicApiKey: "test-key" },
 			current: async () => current,
 			refresh: async value => {
 				refreshed.push(value);
@@ -269,7 +269,7 @@ describe("document summary coordinator", () => {
 	it("recovers a completed description projection through an idempotent enqueue", async () => {
 		let current = target();
 		let definition = documentSummaryDefinition({
-			config: { agent: true, model: "summary-model" },
+			config: { agent: true, model: "summary-model", anthropicApiKey: "test-key" },
 			current: async () => current,
 			refresh: async () => {},
 			commitCurrent,
@@ -346,7 +346,7 @@ describe("document summary coordinator", () => {
 	it("debounces to the newest target and replays idempotently", async () => {
 		let current = target();
 		let definition = documentSummaryDefinition({
-			config: { agent: true, model: "summary-model" },
+			config: { agent: true, model: "summary-model", anthropicApiKey: "test-key" },
 			current: async () => current,
 			refresh: async () => {},
 			commitCurrent,
@@ -399,7 +399,7 @@ describe("document summary coordinator", () => {
 	it("suspends pending and admitted scheduling until resumed", async () => {
 		let current = target();
 		let definition = documentSummaryDefinition({
-			config: { agent: true, model: "summary-model" },
+			config: { agent: true, model: "summary-model", anthropicApiKey: "test-key" },
 			current: async () => current,
 			refresh: async () => {},
 			commitCurrent,

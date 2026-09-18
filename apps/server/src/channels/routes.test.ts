@@ -873,7 +873,7 @@ describe("channel routes", () => {
 		expect(response!.status).toBe(404);
 	});
 
-	it("lets an editor explicitly release the Copilot owner", async () => {
+	it("lets an editor explicitly release the agent owner", async () => {
 		let { router, storage, cookie, sessionId, reset, now } = await setup();
 		let channel = await storage.channels.create({
 			id: crypto.randomUUID(),

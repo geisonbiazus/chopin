@@ -1,6 +1,7 @@
 # Hosted agent (Planner)
 
-Chopin's Copilot-backed document agent is currently named Planner. It can
+Chopin's hosted document agent is currently named Planner, and runs on the
+Anthropic Messages API. It can
 inspect one selected GitHub repository, co-author the shared document, ask the
 participants structured questions, and anchor decisions to prose. For documents
 used as plans, it can also draft an implementation graph. It does not implement
@@ -13,16 +14,18 @@ that is an implementation limitation, not the document model's boundary.
 ## Ownership
 
 The first eligible editor to invoke the Planner or start a model-backed research
-request supplies the GitHub App user access token and Copilot entitlement for
-that channel. The user must pass instance admission and have
-repository push or administration access. Ownership is assigned atomically in
+request supplies the GitHub App user access token used for that channel's
+repository reads. The user must pass instance admission and have repository push
+or administration access. Model access is the deployment's `ANTHROPIC_API_KEY`
+and is not owned by anybody in the room. Ownership is assigned atomically in
 storage and guarded by a generation token.
 
-That process-local login owns the channel's Copilot usage until it expires, logs
-out, the server restarts, or the authenticated reset API releases it. The
-current web application does not expose a reset control. A user without Copilot
-entitlement sees the provider failure on the first model-backed action and
-remains owner until one of those release conditions occurs.
+That process-local login owns the channel's repository access until it expires,
+logs out, the server restarts, or the authenticated reset API releases it. The
+current web application does not expose a reset control. A misconfigured or
+rejected model credential surfaces as a provider failure on the first
+model-backed action, and the owner remains owner until one of those release
+conditions occurs.
 
 PostgreSQL stores the owner session ID only so durable ownership can refer to an
 active process session. The cookie verifier and GitHub credential remain in
@@ -32,9 +35,11 @@ ownership generation.
 
 ## Runtime isolation
 
-The shared Copilot runtime runs in SDK `mode: "empty"`. Each disposable SDK
-session receives its owner's token when created and has no client-level service
-token or logged-in-user fallback.
+Each disposable session is one stateless conversation with the Messages API:
+its transcript, tool list, and permission gate are created with it and die with
+it. There is no child process, no shared workspace, and no state the provider
+keeps between sessions. A session receives its owner's GitHub token when created,
+for its repository reads only.
 
 The Planner has no:
 
@@ -49,17 +54,18 @@ Available capabilities are:
 - Chopin document, question, relationship, and implementation-graph tools (with
   current plan-oriented tool names);
 - bounded file and tree reads plus commit history fixed to the default branch
-  captured when the SDK session is created;
+  captured when the session is created;
 - repository-scoped code search, post-filtered by repository node ID; and
 - bounded reads of document and historical research references attached to the
   current Chat context; and
-- repository-bound, read-only pull-request MCP calls.
+- repository-bound, read-only pull-request reads.
 
-Issue and general search MCP tools are refused because linked objects and
-free-form qualifiers can cross the selected repository boundary. Repository
-REST tools construct owner and repository coordinates on the server, bound
-response sizes and line ranges, reject path escape, and post-filter code search
-by GitHub repository node ID.
+There are no issue or general search tools, because linked objects and free-form
+qualifiers can cross the selected repository boundary. Repository and
+pull-request REST tools construct owner and repository coordinates on the
+server, bound response sizes and line ranges, reject path escape, and
+post-filter code search by GitHub repository node ID. No tool accepts an owner
+or repository argument, so none can be pointed at another repository.
 
 The Planner does not see a user's local checkout, current branch, working tree,
 or uncommitted changes. A coding agent must compare the repository context
@@ -82,7 +88,7 @@ Permission is decided before execution. A refusal therefore produces no normal
 tool start or completion event; the Chat service renders permission
 denials explicitly so the boundary remains visible.
 
-The in-memory SDK session is bound to one credential revision. Before an
+The in-memory session is bound to one credential revision. Before an
 eight-hour GitHub App token refresh, Chopin aborts and discards every Planner
 session using that revision. The next turn creates a fresh session with the new
 token.
@@ -95,7 +101,7 @@ every turn.
 - Messages since the last turn are retained as immediate backscroll, capped at
   40 entries and normally 8,000 characters. One message is retained intact even
   when it alone exceeds that character budget.
-- A recreated Copilot session receives at most the last 100 transcript entries
+- A recreated session receives at most the last 100 transcript entries
   and 50,000 characters. Reserved Planner transcript-summary and cursor fields
   exist in storage, but the current runtime does not advance them. Generated
   descriptions and legacy summaries under durable `document-summary@1` are
@@ -118,26 +124,26 @@ into one anonymous user voice.
 
 ## Session lifecycle
 
-Copilot CLI session files and SDK session IDs are disposable. A process restart,
-credential rotation, logout, or ownership reset discards the SDK session. A
+Sessions are disposable and hold the only copy of their transcript. A process
+restart, credential rotation, logout, or ownership reset discards the session. A
 later turn bootstraps from the bounded transcript and reads the current document.
 
 An interrupted turn is visible and is never replayed automatically because it
 may already have made durable document or question changes. `session.send()` only
-accepts a message; the Chat handler remains active until the SDK emits
-its idle event.
+accepts a message; the Chat handler remains active until the session emits its
+idle event.
 
-The runtime starts lazily on the first Planner turn or model-backed worker
+The runtime is created lazily on the first Planner turn or model-backed worker
 attempt. `AGENT=off` prevents those turns, disables the background-job runner,
-and avoids starting Copilot CLI. It does not disable `/mcp`, and the prototype UI
-may still contain Planner-oriented explanatory copy.
+and means no model credential is required at all. It does not disable `/mcp`,
+and the prototype UI may still contain Planner-oriented explanatory copy.
 
 ## Background jobs
 
 Background jobs are durable Chopin requests, not child Planner turns. Registered
 definitions control their input and artifact codecs, enqueue origins, credential
 mode, timeout, failure budget, declared progress, and artifact settlement. Every
-model-backed stage uses a fresh disposable SDK session. Job output is not
+model-backed stage uses a fresh disposable session. Job output is not
 automatically injected into Chat or recreated Planner context, although
 the Planner may explicitly read an artifact in a later turn.
 

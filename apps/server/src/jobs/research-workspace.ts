@@ -5,7 +5,7 @@ import * as Agent from "../agent/client";
 import { PUBLIC_WEB_SEARCH_SERVER, PUBLIC_WEB_SEARCH_TOOL } from "../agent/permissions";
 import { JobExecutionError } from "./registry";
 
-import type { Tool } from "@github/copilot-sdk";
+import type { Tool } from "../agent/types";
 import type { Config } from "../config";
 import type { JsonValue } from "../storage/model";
 import type { JobDefinition, JobExecution, JobExecutionDiagnostic } from "./registry";
@@ -155,12 +155,12 @@ export type ResearchAnswerEngines = {
 };
 
 export type ResearchEvidenceOptions = {
-	config: Pick<Config, "agent" | "model">;
+	config: Pick<Config, "agent" | "model" | "anthropicApiKey">;
 	engine?: ResearchEvidenceEngine;
 };
 
 export type ResearchAnswerOptions = {
-	config: Pick<Config, "agent" | "model">;
+	config: Pick<Config, "agent" | "model" | "anthropicApiKey">;
 	engines?: ResearchAnswerEngines;
 };
 
@@ -901,7 +901,7 @@ async function classified<T>(operation: () => Promise<T>, reason: string): Promi
 }
 
 async function stage(
-	config: Pick<Config, "agent" | "model">,
+	config: Pick<Config, "agent" | "model" | "anthropicApiKey">,
 	execution: JobExecution<ResearchEvidenceInput | ResearchAnswerInput>,
 	name: string,
 	prompt: string,
@@ -1163,7 +1163,7 @@ async function stage(
 }
 
 function defaultEvidenceEngine(
-	config: Pick<Config, "agent" | "model">,
+	config: Pick<Config, "agent" | "model" | "anthropicApiKey">,
 ): ResearchEvidenceEngine {
 	return async (execution, query) => {
 		try {
@@ -1192,7 +1192,7 @@ function defaultEvidenceEngine(
 }
 
 function defaultAnswerEngines(
-	config: Pick<Config, "agent" | "model">,
+	config: Pick<Config, "agent" | "model" | "anthropicApiKey">,
 ): ResearchAnswerEngines {
 	return {
 		private: async (execution, question, source) =>

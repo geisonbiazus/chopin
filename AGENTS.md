@@ -106,9 +106,10 @@ external implementation runs are durable.
   GitHub bearer directly, does not require the App installation, and can mutate
   data for callers with push or administration access.
 - **Planner ownership is process-bound.** The first eligible Planner or
-  model-backed research request supplies its GitHub App token and Copilot
-  entitlement. The database stores only a token-free owner reference and durable
-  context.
+  model-backed research request supplies its GitHub App token for repository
+  reads; model access is the deployment's Anthropic API key and belongs to
+  nobody in the room. The database stores only a token-free owner reference and
+  durable context.
 - **Planner tools are repository-fixed.** The hosted runtime has no shell,
   checkout, host filesystem, skills, plugins, or arbitrary GitHub access.
 - **Repository node IDs are authoritative.** Owner and repository names resolve

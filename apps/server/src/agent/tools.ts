@@ -20,7 +20,7 @@ import { implementationGraphs, implementationReadiness } from "../tasks/plan-gra
 import { implementationActive } from "../plan/service";
 
 import type { Server } from "bun";
-import type { Tool } from "@github/copilot-sdk";
+import type { Tool } from "./types";
 import type { Research } from "@chopin/protocol";
 import type { Plan } from "../plan/service";
 import type { JobService } from "../jobs/service";

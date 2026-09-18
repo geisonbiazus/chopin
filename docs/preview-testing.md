@@ -92,6 +92,7 @@ GITHUB_APP_CLIENT_ID=<preview-app-client-id>
 GITHUB_APP_CLIENT_SECRET=<preview-app-client-secret>
 GITHUB_ALLOWED_USERS=<test-account-login>
 SESSION_ENCRYPTION_KEY=<preview-only-64-hex-character-key>
+ANTHROPIC_API_KEY=<preview-only-anthropic-key>
 ```
 
 `GITHUB_ALLOWED_USERS` must be a runtime variable. Organization admission is a
